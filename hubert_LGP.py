@@ -1,3 +1,4 @@
+from typing import ForwardRef
 import numpy as np
 from numpy.random import randint, uniform
 from math import pi, cos, sin, sqrt
@@ -23,13 +24,13 @@ y3 = 0
 z3 = 0
 
 POPULATION_SIZE = 100
-CHROMOSOME_LENGTH = 10
+CHROMOSOME_LENGTH = 25
 TOURNAMENT_SELECTION_PARAMETER = 0.8
 CROSSOVER_LIMIT = 3
-MUTATION_PROBABILITY = 0.01
+MUTATION_PROBABILITY = 0.001
 
-NUMBER_OF_GENERATIONS = 1000
-NUMBER_OF_POINTS = 20
+NUMBER_OF_GENERATIONS = 100
+NUMBER_OF_POINTS = 25
 CROSSOVER_PROBABILITY = 0.7
 NUMBER_OF_COPIES = 2
 
@@ -37,11 +38,11 @@ CONSTANT_REGISTERS = [1, 0.001, 0.01, 0.1, 0.5]
 
 class InverseKinematicsLGP:
 
-    def __init__(self, x, y, z):
+    def __init__(self):
 
-        self.x = x
-        self.y = y
-        self.z = z
+        self.x = 0
+        self.y = 0
+        self.z = 0
 
         self.x0 = 0
         self.y0 = 0
@@ -53,6 +54,8 @@ class InverseKinematicsLGP:
 
         self.population = []
         self.population_fitness = np.zeros(shape=(POPULATION_SIZE, ))
+
+        self.euclidian_error = 0
 
     def init_population(self):
         # Population: a list of lists of tuples, [  [(O, D, O1, O2), (O, D, O1, O2), (O, D, O1, O2)...], 
@@ -81,6 +84,19 @@ class InverseKinematicsLGP:
         self.y0 = (x1+L6)*sin(self.theta1) - (z1+L4)*cos(self.theta1)
         self.z0 = y1 + L2 + L3
 
+    def forward(self):
+        x2 = x3 * cos(self.theta3) - (y3-L9)*sin(self.theta3)
+        y2 = x3 * sin(self.theta3) + (y3-L9)*cos(self.theta3)
+        z2 = z3
+
+        x1 = (x2+L7)*cos(self.theta2) - (y2-L8)*sin(self.theta2)
+        y1 = (x2+L7)*sin(self.theta2) + (y2-L8)*cos(self.theta2)
+        z1 = z2 - L5
+
+        self.x = (x1+L6)*cos(self.theta1) + (z1+L4)*sin(self.theta1)
+        self.y = (x1+L6)*sin(self.theta1) - (z1+L4)*cos(self.theta1)
+        self.z = y1 + L2 + L3
+
     def randomize_angles(self):
         self.theta1 = uniform(0, 1) * pi
         self.theta2 = uniform(0, 1) * pi
@@ -89,6 +105,7 @@ class InverseKinematicsLGP:
     def compute_fitness(self, chromosome):
         euclidian_distance = sqrt((self.x0 - self.x)**2 + (self.y0 - self.y)**2 + (self.z0 - self.z)**2)
         penalty = CHROMOSOME_PENALTY_FACTOR * len(chromosome)
+        self.euclidian_error = euclidian_distance
         return 1/euclidian_distance - penalty
 
     def decode_chromosome(self, pop_idx):
@@ -134,8 +151,8 @@ class InverseKinematicsLGP:
         individual2 = 0
 
         while(individual1 == individual2):
-            individual1 = randint(0, POPULATION_SIZE - 1)
-            individual2 = randint(0, POPULATION_SIZE - 1)
+            individual1 = randint(0, POPULATION_SIZE)
+            individual2 = randint(0, POPULATION_SIZE)
         
         random_factor = uniform(0.0, 1.0)
 
@@ -198,17 +215,21 @@ class InverseKinematicsLGP:
             return False
 
 if __name__ == "__main__":
-    algorithm = InverseKinematicsLGP(x=0, y=0, z=0)
+    algorithm = InverseKinematicsLGP()
 
     all_time_highetst_score = 0
     algorithm.init_population()
 
     for gen in range(NUMBER_OF_GENERATIONS):
 
+        algorithm.population_fitness = np.zeros(shape=(POPULATION_SIZE, ))
+
         for points in range(NUMBER_OF_POINTS):
             
             algorithm.randomize_angles()
+            algorithm.forward()
             algorithm.compute_P()
+
             for i in range(POPULATION_SIZE):
                 #for chromosome, ind, in enumerate(population[i][:]):
                 chromosome = algorithm.population[i]
@@ -218,7 +239,7 @@ if __name__ == "__main__":
                     algorithm.population_fitness[i] += algorithm.compute_fitness(chromosome)
                 else:
                     algorithm.population_fitness[i] -= 100  # ??
-        
+
         temp_population = []
         # Save fittest individual
         fittest_individual_index = np.argmax(algorithm.population_fitness)
@@ -249,7 +270,7 @@ if __name__ == "__main__":
             temp_population[i] = mutated_chromosome
         # insert fittest individual (elitism) 
         for i in range(NUMBER_OF_COPIES):
-            random_index = randint(0,POPULATION_SIZE-1)
+            random_index = randint(0,POPULATION_SIZE)
             temp_population[random_index] = fittest_individual
 
         population = temp_population
@@ -257,17 +278,19 @@ if __name__ == "__main__":
         print(len(fittest_individual))
         print(  f"Gen: {gen} Max: {max(algorithm.population_fitness)/NUMBER_OF_POINTS}" + 
                 f"Average: {sum(algorithm.population_fitness)/(len(algorithm.population_fitness)*NUMBER_OF_POINTS)}")
+        print("ERROR: " + str(algorithm.euclidian_error))
 
-        if max(algorithm.population_fitness)/NUMBER_OF_POINTS > 150:
-            break
+        if algorithm.euclidian_error < 7:
+            pass
     
     
     plt.figure()
     chromosome = fittest_individual #fittest_individual
     for i in range(4):
         algorithm.randomize_angles()
+        algorithm.forward()
         algorithm.compute_P()
-        coordinate = [algorithm.x0, algorithm.y0, algorithm.z0]
+        coordinate = [algorithm.x, algorithm.y, algorithm.z]
         algorithm.decode_chromosome(fittest_individual_index)
         algorithm.compute_P()
         
