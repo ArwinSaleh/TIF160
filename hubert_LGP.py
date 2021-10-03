@@ -4,7 +4,7 @@ from numpy.random import randint, uniform
 from math import pi, cos, sin, sqrt
 import matplotlib.pyplot as plt
 
-CHROMOSOME_PENALTY_FACTOR = 0.001
+CHROMOSOME_PENALTY_FACTOR = 0.000001
 
 M = 6
 N = 5
@@ -24,7 +24,7 @@ y3 = 0
 z3 = 0
 
 POPULATION_SIZE = 100
-CHROMOSOME_LENGTH = 25
+CHROMOSOME_LENGTH = 50
 TOURNAMENT_SELECTION_PARAMETER = 0.8
 CROSSOVER_LIMIT = 3
 MUTATION_PROBABILITY = 0.001
@@ -44,13 +44,13 @@ class InverseKinematicsLGP:
         self.y = 0
         self.z = 0
 
-        self.x0 = 0
-        self.y0 = 0
-        self.z0 = 0
+        self.x0 = np.zeros((NUMBER_OF_POINTS, ))
+        self.y0 = np.zeros((NUMBER_OF_POINTS, ))
+        self.z0 = np.zeros((NUMBER_OF_POINTS, ))
 
-        self.theta3 = 0
-        self.theta2 = 0
-        self.theta1 = 0
+        self.theta3 = np.zeros((NUMBER_OF_POINTS, ))
+        self.theta2 = np.zeros((NUMBER_OF_POINTS, ))
+        self.theta1 = np.zeros((NUMBER_OF_POINTS, ))
 
         self.population = []
         self.population_fitness = np.zeros(shape=(POPULATION_SIZE, ))
@@ -71,45 +71,50 @@ class InverseKinematicsLGP:
             self.population.append(current_chromosome)
 
 
-    def compute_P(self):
-        x2 = x3 * cos(self.theta3) - (y3-L9)*sin(self.theta3)
-        y2 = x3 * sin(self.theta3) + (y3-L9)*cos(self.theta3)
+    def compute_P(self, current_P):
+        x2 = x3 * cos(self.theta3[current_P]) - (y3-L9)*sin(self.theta3[current_P])
+        y2 = x3 * sin(self.theta3[current_P]) + (y3-L9)*cos(self.theta3[current_P])
         z2 = z3
 
-        x1 = (x2+L7)*cos(self.theta2) - (y2-L8)*sin(self.theta2)
-        y1 = (x2+L7)*sin(self.theta2) + (y2-L8)*cos(self.theta2)
+        x1 = (x2+L7)*cos(self.theta2[current_P]) - (y2-L8)*sin(self.theta2[current_P])
+        y1 = (x2+L7)*sin(self.theta2[current_P]) + (y2-L8)*cos(self.theta2[current_P])
         z1 = z2 - L5
 
-        self.x0 = (x1+L6)*cos(self.theta1) + (z1+L4)*sin(self.theta1)
-        self.y0 = (x1+L6)*sin(self.theta1) - (z1+L4)*cos(self.theta1)
-        self.z0 = y1 + L2 + L3
+        self.x0[current_P] = (x1+L6)*cos(self.theta1[current_P]) + (z1+L4)*sin(self.theta1[current_P])
+        self.y0[current_P] = (x1+L6)*sin(self.theta1[current_P]) - (z1+L4)*cos(self.theta1[current_P])
+        self.z0[current_P] = y1 + L2 + L3
 
-    def forward(self):
-        x2 = x3 * cos(self.theta3) - (y3-L9)*sin(self.theta3)
-        y2 = x3 * sin(self.theta3) + (y3-L9)*cos(self.theta3)
+    def forward(self, current_P):
+        x2 = x3 * cos(self.theta3[current_P]) - (y3-L9)*sin(self.theta3[current_P])
+        y2 = x3 * sin(self.theta3[current_P]) + (y3-L9)*cos(self.theta3[current_P])
         z2 = z3
 
-        x1 = (x2+L7)*cos(self.theta2) - (y2-L8)*sin(self.theta2)
-        y1 = (x2+L7)*sin(self.theta2) + (y2-L8)*cos(self.theta2)
+        x1 = (x2+L7)*cos(self.theta2[current_P]) - (y2-L8)*sin(self.theta2[current_P])
+        y1 = (x2+L7)*sin(self.theta2[current_P]) + (y2-L8)*cos(self.theta2[current_P])
         z1 = z2 - L5
 
-        self.x = (x1+L6)*cos(self.theta1) + (z1+L4)*sin(self.theta1)
-        self.y = (x1+L6)*sin(self.theta1) - (z1+L4)*cos(self.theta1)
+        self.x = (x1+L6)*cos(self.theta1[current_P]) + (z1+L4)*sin(self.theta1[current_P])
+        self.y = (x1+L6)*sin(self.theta1[current_P]) - (z1+L4)*cos(self.theta1[current_P])
         self.z = y1 + L2 + L3
 
-    def randomize_angles(self):
-        self.theta1 = uniform(0, 1) * pi
-        self.theta2 = uniform(0, 1) * pi
-        self.theta3 = uniform(0, 1) * pi / 2
+    def randomize_angles(self, current_P):
+        self.theta1[current_P] = uniform(0, 1) * pi
+        self.theta2[current_P] = uniform(0, 1) * pi
+        self.theta3[current_P] = uniform(0, 1) * pi / 2
 
-    def compute_fitness(self, chromosome):
-        euclidian_distance = sqrt((self.x0 - self.x)**2 + (self.y0 - self.y)**2 + (self.z0 - self.z)**2)
-        penalty = CHROMOSOME_PENALTY_FACTOR * len(chromosome)
-        self.euclidian_error = euclidian_distance
+    def compute_fitness(self, chromosome, current_P):
+        euclidian_distance = sqrt(  (self.x0[current_P] - self.x)**2 + 
+                                    (self.y0[current_P] - self.y)**2 + 
+                                    (self.z0[current_P] - self.z)**2    )
+        penalty = CHROMOSOME_PENALTY_FACTOR * len(chromosome)    
+        self.euclidian_error += euclidian_distance
         return 1/euclidian_distance - penalty
 
-    def decode_chromosome(self, pop_idx):
-        registers = np.concatenate(([self.x0, self.y0, self.z0], CONSTANT_REGISTERS))
+    def decode_chromosome(self, pop_idx, current_P):
+        registers = np.concatenate(([   self.x0[current_P], 
+                                        self.y0[current_P], 
+                                        self.z0[current_P]], 
+                                        CONSTANT_REGISTERS) )
         skip_instruction = False
 
         chromosome = self.population[pop_idx]
@@ -140,9 +145,9 @@ class InverseKinematicsLGP:
                     if operand1 > operand2:
                         skip_instruction = True
 
-        self.theta1 = registers[0]
-        self.theta2 = registers[1]
-        self.theta3 = registers[2]
+        self.theta1[current_P] = registers[0]
+        self.theta2[current_P] = registers[1]
+        self.theta3[current_P] = registers[2]
 
     def tournament_selection(self):
 
@@ -176,6 +181,8 @@ class InverseKinematicsLGP:
 
         if len(chromosome1) >= CROSSOVER_LIMIT and len(chromosome2) >= CROSSOVER_LIMIT:
 
+            # TEST THIS FUNCTION IN SEPARATE FILE
+
             chromo1_split_idx1 = randint(0, len(chromosome1))
             chromo1_split_idx2 = randint(0, len(chromosome1))
 
@@ -198,18 +205,26 @@ class InverseKinematicsLGP:
 
     def random_mutation(self, chromosome):
         for idx, _ in enumerate(chromosome):
-            random_factor = uniform(0, 1)
-            if random_factor < MUTATION_PROBABILITY:
-                chromosome[idx] = ( randint(0, 7), 
-                                    randint(0, 2),
-                                    randint(0, N+2),
-                                    randint(0, N+2) )
+            for gene in range(4):
+                instruction = np.asarray(chromosome[idx])
+                random_factor = uniform(0, 1)
+                if random_factor < MUTATION_PROBABILITY:
+                    if gene == 0:
+                        instruction[gene] = randint(0, 7)
+                    elif gene == 1:
+                        instruction[gene] = randint(0, 2)
+                    else:
+                        instruction[gene] = randint(0, N+2)
+            chromosome[idx] = ( instruction[0],
+                                instruction[1],
+                                instruction[2],
+                                instruction[3]  )
         return chromosome
 
-    def angles_in_interval(self):
-        if ((0 <= self.theta1 <= pi) and 
-            (0 <= self.theta2 <= pi) and
-            (0 <= self.theta3 <= pi / 2)):
+    def angles_in_interval(self, current_p):
+        if ((0 <= self.theta1[current_p] <= pi) and 
+            (0 <= self.theta2[current_p] <= pi) and
+            (0 <= self.theta3[current_p] <= pi / 2)):
             return True
         else:
             return False
@@ -220,25 +235,26 @@ if __name__ == "__main__":
     all_time_highetst_score = 0
     algorithm.init_population()
 
+    for current_P in range(NUMBER_OF_POINTS):
+            
+            algorithm.randomize_angles(current_P)
+            algorithm.compute_P(current_P)
+
     for gen in range(NUMBER_OF_GENERATIONS):
 
         algorithm.population_fitness = np.zeros(shape=(POPULATION_SIZE, ))
 
-        for points in range(NUMBER_OF_POINTS):
-            
-            algorithm.randomize_angles()
-            algorithm.forward()
-            algorithm.compute_P()
-
-            for i in range(POPULATION_SIZE):
-                #for chromosome, ind, in enumerate(population[i][:]):
-                chromosome = algorithm.population[i]
-                algorithm.decode_chromosome(i)
-                algorithm.compute_P()
-                if algorithm.angles_in_interval():
-                    algorithm.population_fitness[i] += algorithm.compute_fitness(chromosome)
+        for i in range(POPULATION_SIZE):
+            chromosome = algorithm.population[i]
+            for current_P in range(NUMBER_OF_POINTS):
+                algorithm.decode_chromosome(i, current_P)
+                algorithm.forward(current_P)
+                if algorithm.angles_in_interval(current_P):
+                    algorithm.population_fitness[i] += algorithm.compute_fitness(chromosome, current_P)
+                    if len(algorithm.population[i]) < 10:
+                        algorithm.population_fitness[i] -= 10
                 else:
-                    algorithm.population_fitness[i] -= 100  # ??
+                    algorithm.population_fitness[i] -= 10  # Maybe not so high penalty?
 
         temp_population = []
         # Save fittest individual
@@ -271,39 +287,14 @@ if __name__ == "__main__":
         # insert fittest individual (elitism) 
         for i in range(NUMBER_OF_COPIES):
             random_index = randint(0,POPULATION_SIZE)
-            temp_population[random_index] = fittest_individual
+            temp_population[random_index] = all_time_fittest
 
-        population = temp_population
+        algorithm.population = np.copy(temp_population)
 
-        print(len(fittest_individual))
-        print(  f"Gen: {gen} Max: {max(algorithm.population_fitness)/NUMBER_OF_POINTS}" + 
-                f"Average: {sum(algorithm.population_fitness)/(len(algorithm.population_fitness)*NUMBER_OF_POINTS)}")
-        print("ERROR: " + str(algorithm.euclidian_error))
+        print(  f"\nGen: {gen} Max: {max(algorithm.population_fitness)/NUMBER_OF_POINTS}" + 
+                f"\tAverage: {sum(algorithm.population_fitness)/(len(algorithm.population_fitness)*NUMBER_OF_POINTS)}")
+        print("\nAVG ERROR: " + str(algorithm.euclidian_error / (NUMBER_OF_POINTS * POPULATION_SIZE)))
+        print("ALL TIME FITTEST: " + str(all_time_highetst_score/NUMBER_OF_POINTS))
+        print("CHROMOSOME LENGTH: " + str(len(all_time_fittest)))
 
-        if algorithm.euclidian_error < 7:
-            pass
-    
-    
-    plt.figure()
-    chromosome = fittest_individual #fittest_individual
-    for i in range(4):
-        algorithm.randomize_angles()
-        algorithm.forward()
-        algorithm.compute_P()
-        coordinate = [algorithm.x, algorithm.y, algorithm.z]
-        algorithm.decode_chromosome(fittest_individual_index)
-        algorithm.compute_P()
-        
-        plt.subplot(1,3,1)
-        plt.title("X")
-        plt.plot(algorithm.x0, coordinate[0], "-o", label=(f"{i}"))
-        plt.legend()
-        plt.subplot(1,3,2)
-        plt.title("Y")
-        plt.plot(algorithm.y0, coordinate[1], "-o", label=(f"{i}"))
-        plt.legend()
-        plt.subplot(1,3,3)
-        plt.title("Z")
-        plt.plot(algorithm.z0, coordinate[2], "-o", label=(f"{i}"))
-        plt.legend()
-    plt.show()
+        algorithm.euclidian_error = 0
