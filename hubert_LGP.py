@@ -29,12 +29,12 @@ TOURNAMENT_SELECTION_PARAMETER = 0.8
 CROSSOVER_LIMIT = 3
 MUTATION_PROBABILITY = 0.001
 
-NUMBER_OF_GENERATIONS = 100
+NUMBER_OF_GENERATIONS = 1000
 NUMBER_OF_POINTS = 25
 CROSSOVER_PROBABILITY = 0.7
 NUMBER_OF_COPIES = 2
 
-CONSTANT_REGISTERS = [1, 0.001, 0.01, 0.1, 0.5]
+CONSTANT_REGISTERS = [randint(1, 3), uniform(0, 1), uniform(0, 1), uniform(0, 1), 0.5]
 
 class InverseKinematicsLGP:
 
@@ -64,10 +64,10 @@ class InverseKinematicsLGP:
             current_chromosome = []
             for j in range(CHROMOSOME_LENGTH):
                 # Tuple of genes: (Operator, Destination, Operand1, Operand 2)
-                current_chromosome.append(( randint(0, 7), 
-                                            randint(0, 2), 
-                                            randint(0, N+2),
-                                            randint(0, N+2)   ))
+                current_chromosome.append(( randint(0, 8), 
+                                            randint(0, 3), 
+                                            randint(0, N+3),
+                                            randint(0, N+3)   ))
             self.population.append(current_chromosome)
 
 
@@ -106,9 +106,9 @@ class InverseKinematicsLGP:
         euclidian_distance = sqrt(  (self.x0[current_P] - self.x)**2 + 
                                     (self.y0[current_P] - self.y)**2 + 
                                     (self.z0[current_P] - self.z)**2    )
-        penalty = CHROMOSOME_PENALTY_FACTOR * len(chromosome)    
+        penalty = CHROMOSOME_PENALTY_FACTOR * len(chromosome)
         self.euclidian_error += euclidian_distance
-        return 1/euclidian_distance - penalty
+        return (1/euclidian_distance - penalty)
 
     def decode_chromosome(self, pop_idx, current_P):
         registers = np.concatenate(([   self.x0[current_P], 
@@ -125,25 +125,23 @@ class InverseKinematicsLGP:
                 skip_instruction = False
             else:
                 (operator, destination, operand1, operand2) = gene
-                if operator == 0: # Operation: +
+                if operator == 0:
                     registers[destination] = operand1 + operand2
-                elif operator == 1: # Operation: -
+                elif operator == 1:
                     registers[destination] = operand1 - operand2
-                elif operator == 2: # Operation: *
+                elif operator == 2:
                     registers[destination] = operand1 * operand2
-                elif operator == 3: # Operation: /
+                elif operator == 3:
                     if not operand2 == 0: 
                         registers[destination] = operand1 / operand2
-                elif operator == 4: # Operation: cos
+                elif operator == 4:
                     registers[destination] = cos(operand1)
-                elif operator == 5: # Operation: sin
+                elif operator == 5:
                     registers[destination] = sin(operand2)
-                elif operator == 6: # Operation: <=
-                    if operand1 <= operand2:
-                        skip_instruction = True
-                elif operator == 7: # Operation: >
-                    if operand1 > operand2:
-                        skip_instruction = True
+                elif operator == 6 and operand1 <= operand2:
+                    skip_instruction = True
+                elif operator == 7 and operand1 > operand2:
+                    skip_instruction = True
 
         self.theta1[current_P] = registers[0]
         self.theta2[current_P] = registers[1]
@@ -210,11 +208,11 @@ class InverseKinematicsLGP:
                 random_factor = uniform(0, 1)
                 if random_factor < MUTATION_PROBABILITY:
                     if gene == 0:
-                        instruction[gene] = randint(0, 7)
+                        instruction[gene] = randint(0, 8)
                     elif gene == 1:
-                        instruction[gene] = randint(0, 2)
+                        instruction[gene] = randint(0, 3)
                     else:
-                        instruction[gene] = randint(0, N+2)
+                        instruction[gene] = randint(0, N+3)
             chromosome[idx] = ( instruction[0],
                                 instruction[1],
                                 instruction[2],
@@ -232,7 +230,7 @@ class InverseKinematicsLGP:
 if __name__ == "__main__":
     algorithm = InverseKinematicsLGP()
 
-    all_time_highetst_score = 0
+    highest_fitness_score = 0
     algorithm.init_population()
 
     for current_P in range(NUMBER_OF_POINTS):
@@ -251,26 +249,25 @@ if __name__ == "__main__":
                 algorithm.forward(current_P)
                 if algorithm.angles_in_interval(current_P):
                     algorithm.population_fitness[i] += algorithm.compute_fitness(chromosome, current_P)
-                    if len(algorithm.population[i]) < 10:
-                        algorithm.population_fitness[i] -= 10
                 else:
                     algorithm.population_fitness[i] -= 10  # Maybe not so high penalty?
 
         temp_population = []
-        # Save fittest individual
-        fittest_individual_index = np.argmax(algorithm.population_fitness)
-        fittest_individual = algorithm.population[fittest_individual_index]
-        fitness_score_best_ind = algorithm.population_fitness[fittest_individual_index]
-        if fitness_score_best_ind > all_time_highetst_score:
-            all_time_fittest = fittest_individual
-            all_time_highetst_score = fitness_score_best_ind
-        # Tournament_selection & Crossover
+        # Save individual with highest fitness score
+        fitness_index = np.argmax(algorithm.population_fitness)
+        fitness_chromosome = algorithm.population[fitness_index]
+        fitness_score = algorithm.population_fitness[fitness_index]
+        if fitness_score > highest_fitness_score:
+            highest_fitness_chromosome = fitness_chromosome
+            highest_fitness_score = fitness_score
+        
+        # Tournament Selection
         for i in range(0, POPULATION_SIZE, 2):
             # tournament selction
             i1 = algorithm.tournament_selection()
             i2 = algorithm.tournament_selection()
 
-            # crossover
+            # Crossover
             r = uniform(0, 1)
             if r < CROSSOVER_PROBABILITY:
                 algorithm.chromosome_crossover(i1, i2)
@@ -287,14 +284,13 @@ if __name__ == "__main__":
         # insert fittest individual (elitism) 
         for i in range(NUMBER_OF_COPIES):
             random_index = randint(0,POPULATION_SIZE)
-            temp_population[random_index] = all_time_fittest
+            temp_population[random_index] = highest_fitness_chromosome
 
         algorithm.population = np.copy(temp_population)
 
-        print(  f"\nGen: {gen} Max: {max(algorithm.population_fitness)/NUMBER_OF_POINTS}" + 
-                f"\tAverage: {sum(algorithm.population_fitness)/(len(algorithm.population_fitness)*NUMBER_OF_POINTS)}")
-        print("\nAVG ERROR: " + str(algorithm.euclidian_error / (NUMBER_OF_POINTS * POPULATION_SIZE)))
-        print("ALL TIME FITTEST: " + str(all_time_highetst_score/NUMBER_OF_POINTS))
-        print("CHROMOSOME LENGTH: " + str(len(all_time_fittest)))
+        print("\nGENERATION: " + str(gen + 1))
+        print("AVG ERROR: " + str(algorithm.euclidian_error / (NUMBER_OF_POINTS * POPULATION_SIZE)))
+        print("HIGHEST FITNES SCORE: " + str(highest_fitness_score/NUMBER_OF_POINTS))
+        print("CHROMOSOME LENGTH: " + str(len(highest_fitness_chromosome)))
 
         algorithm.euclidian_error = 0
